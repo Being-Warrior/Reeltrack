@@ -7,8 +7,10 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { generateRecommendations } from "@/lib/recommendations";
 import { boostTitleGenres, getTasteProfile, setGenrePreferences } from "@/lib/taste";
+import { COUNTRY_CODE_SET } from "@/lib/countries";
 
 const onboardingSchema = z.object({
+  country: z.string().length(2).transform((value) => value.toUpperCase()).refine((value) => COUNTRY_CODE_SET.has(value), "Choose a valid country."),
   genreIds: z.array(z.string().uuid()).min(1).max(12),
   favoriteIds: z.array(z.string().uuid()).min(1).max(12),
   ratings: z.array(z.object({ titleId: z.string().uuid(), rating: z.number().min(0.5).max(5) })),
@@ -53,8 +55,8 @@ export async function completeOnboarding(input: z.infer<typeof onboardingSchema>
 
   await prisma.userPreference.upsert({
     where: { userId: user.id },
-    update: { onboardingCompleted: true },
-    create: { userId: user.id, onboardingCompleted: true },
+    update: { country: parsed.data.country, onboardingCompleted: true },
+    create: { userId: user.id, country: parsed.data.country, onboardingCompleted: true },
   });
 
   await generateRecommendations(user.id);

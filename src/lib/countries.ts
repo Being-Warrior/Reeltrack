@@ -20,3 +20,15 @@ export const COUNTRY_CODES = [
 ] as const;
 
 export const COUNTRY_CODE_SET = new Set<string>(COUNTRY_CODES);
+
+export function normalizeCountryCode(value: string | null | undefined, fallback = "US") {
+  const code = value?.trim().toUpperCase();
+  return code && COUNTRY_CODE_SET.has(code) ? code : fallback;
+}
+
+// Google commonly provides a locale such as "en-US". It is only a useful
+// country default when that locale explicitly contains a two-letter region.
+export function countryFromLocale(locale: string | null | undefined) {
+  const region = locale?.match(/[-_]([A-Za-z]{2})$/)?.[1]?.toUpperCase();
+  return region && COUNTRY_CODE_SET.has(region) ? region : undefined;
+}

@@ -9,5 +9,5 @@ export default async function OnboardingPage() {
   if (user.preferences?.onboardingCompleted) redirect("/home");
 
   const catalog = await getOnboardingCatalog();
-  return <OnboardingWizard genres={catalog.genres} titles={catalog.titles} />;
+  return <OnboardingWizard genres={catalog.genres} titles={catalog.titles} defaultCountry={user.preferences?.country ?? "US"} />;
 }

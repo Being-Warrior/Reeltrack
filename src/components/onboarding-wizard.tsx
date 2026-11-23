@@ -6,13 +6,15 @@ import { completeOnboarding } from "@/actions/onboarding";
 import { Poster } from "@/components/poster";
 import type { TitleCardModel } from "@/lib/titles";
 import { cn } from "@/lib/utils";
+import { CountrySelect } from "@/components/country-select";
 
 type Genre = { id: string; name: string };
 type TasteItem = { name: string; percent: number };
 
-export function OnboardingWizard({ genres, titles }: { genres: Genre[]; titles: TitleCardModel[] }) {
+export function OnboardingWizard({ genres, titles, defaultCountry }: { genres: Genre[]; titles: TitleCardModel[]; defaultCountry: string }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const [country, setCountry] = useState(defaultCountry);
   const [genreIds, setGenreIds] = useState<string[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [ratings, setRatings] = useState<Record<string, number>>({});
@@ -28,9 +30,9 @@ export function OnboardingWizard({ genres, titles }: { genres: Genre[]; titles: 
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
-      <p className="text-xs uppercase tracking-[0.3em] text-gold">Step {step + 1} of 5</p>
+      <p className="text-xs uppercase tracking-[0.3em] text-gold">Step {step + 1} of 6</p>
       <h1 className="mt-2 font-serif text-5xl">
-        {step === 0 ? "Let's get to know your taste." : step === 4 && taste.length ? "We've got your taste." : "Tell us what you love"}
+        {step === 0 ? "Let's get to know your taste." : step === 5 && taste.length ? "We've got your taste." : "Tell us what you love"}
       </h1>
 
       {step === 0 ? (
@@ -40,6 +42,16 @@ export function OnboardingWizard({ genres, titles }: { genres: Genre[]; titles: 
       ) : null}
 
       {step === 1 ? (
+        <section className="mt-8 max-w-md">
+          <p className="text-muted">Choose your country so streaming services and release dates match where you live.</p>
+          <label className="mt-5 block text-sm">
+            Country
+            <CountrySelect value={country} onChange={(event) => setCountry(event.target.value)} className="mt-1 w-full rounded-2xl border border-line bg-bg px-4 py-3" />
+          </label>
+        </section>
+      ) : null}
+
+      {step === 2 ? (
         <section className="mt-8">
           <p className="text-muted">Pick a few genres. One is enough; twelve is the ceiling.</p>
           <div className="mt-6 flex flex-wrap gap-2">
@@ -59,7 +71,7 @@ export function OnboardingWizard({ genres, titles }: { genres: Genre[]; titles: 
         </section>
       ) : null}
 
-      {step === 2 ? (
+      {step === 3 ? (
         <section className="mt-8">
           <p className="text-muted">Favourite a handful of titles we already have in the catalog.</p>
           <div className="mt-6 grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6">
@@ -84,7 +96,7 @@ export function OnboardingWizard({ genres, titles }: { genres: Genre[]; titles: 
         </section>
       ) : null}
 
-      {step === 3 ? (
+      {step === 4 ? (
         <section className="mt-8">
           <p className="text-muted">Rate a few you’ve already seen. Half-stars aren’t needed here — pick 1 to 5.</p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -113,7 +125,7 @@ export function OnboardingWizard({ genres, titles }: { genres: Genre[]; titles: 
         </section>
       ) : null}
 
-      {step === 4 ? (
+      {step === 5 ? (
         <section className="mt-8 max-w-2xl">
           {pending ? <p className="text-lg text-muted">Reading the patterns in what you picked...</p> : null}
           {taste.length > 0 ? (
@@ -132,25 +144,26 @@ export function OnboardingWizard({ genres, titles }: { genres: Genre[]; titles: 
       {error ? <p className="mt-4 text-sm text-terracotta">{error}</p> : null}
 
       <div className="mt-10 flex gap-3">
-        {step > 0 && step < 4 ? (
+        {step > 0 && step < 5 ? (
           <button onClick={() => setStep(step - 1)} className="rounded-full border border-line px-5 py-2 text-sm">
             Back
           </button>
         ) : null}
-        {step < 3 ? (
+        {step < 4 ? (
           <button
             onClick={() => setStep(step + 1)}
-            disabled={step === 1 && genreIds.length === 0}
+            disabled={step === 2 && genreIds.length === 0}
             className="rounded-full bg-gold px-5 py-2 text-sm text-bg disabled:opacity-50"
           >
             Continue
           </button>
-        ) : step === 3 ? (
+        ) : step === 4 ? (
           <button
             disabled={pending || favoriteIds.length === 0 || Object.keys(ratings).length === 0}
             onClick={() =>
               start(async () => {
                 const result = await completeOnboarding({
+                  country,
                   genreIds,
                   favoriteIds,
                   ratings: Object.entries(ratings).map(([titleId, rating]) => ({ titleId, rating })),
@@ -160,7 +173,7 @@ export function OnboardingWizard({ genres, titles }: { genres: Genre[]; titles: 
                   return;
                 }
                 setTaste(result.taste ?? []);
-                setStep(4);
+                setStep(5);
               })
             }
             className="rounded-full bg-gold px-5 py-2 text-sm text-bg disabled:opacity-50"

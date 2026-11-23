@@ -1,16 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { logoutAction } from "@/actions/auth";
 import { deleteAccount, deleteSearchHistory, deleteWatchHistory, exportUserData, updateSettings } from "@/actions/user";
-import { COUNTRY_CODES } from "@/lib/countries";
-
-const regionNames = new Intl.DisplayNames("en", { type: "region" });
-const countries = COUNTRY_CODES
-  .map((code) => ({ code, name: regionNames.of(code) ?? code }))
-  .sort((a, b) => a.name.localeCompare(b.name));
+import { CountrySelect } from "@/components/country-select";
 
 export function SettingsForms({
   name,
@@ -33,9 +28,7 @@ export function SettingsForms({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const selectedCountry = COUNTRY_CODES.includes(country.toUpperCase() as (typeof COUNTRY_CODES)[number])
-    ? country.toUpperCase()
-    : "US";
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
 
   return (
     <div className="space-y-10">
@@ -43,18 +36,25 @@ export function SettingsForms({
         className="max-w-xl space-y-4 rounded-3xl border border-line bg-paper p-6"
         action={(formData) =>
           start(async () => {
-            await updateSettings({
-              name: String(formData.get("name")),
-              username: String(formData.get("username")),
-              language: String(formData.get("language")),
-              country: String(formData.get("country")),
-              recommendationsEnabled: formData.get("recommendationsEnabled") === "on",
-              privateProfile: formData.get("privateProfile") === "on",
-              releaseReminders: formData.get("releaseReminders") === "on",
-              familyMode: formData.get("familyMode") === "on",
-            });
-            toast.success("Settings saved");
-            router.refresh();
+            setSaveStatus("idle");
+            try {
+              await updateSettings({
+                name: String(formData.get("name")),
+                username: String(formData.get("username")),
+                language: String(formData.get("language")),
+                country: String(formData.get("country")),
+                recommendationsEnabled: formData.get("recommendationsEnabled") === "on",
+                privateProfile: formData.get("privateProfile") === "on",
+                releaseReminders: formData.get("releaseReminders") === "on",
+                familyMode: formData.get("familyMode") === "on",
+              });
+              setSaveStatus("saved");
+              toast.success("Settings saved", { description: "Your profile and preferences are up to date." });
+              router.refresh();
+            } catch {
+              setSaveStatus("error");
+              toast.error("Settings could not be saved", { description: "Check your name and username, then try again." });
+            }
           })
         }
       >
@@ -74,17 +74,7 @@ export function SettingsForms({
           </label>
           <label className="block text-sm">
             Country
-            <select
-              name="country"
-              defaultValue={selectedCountry}
-              className="mt-1 w-full rounded-2xl border border-line bg-bg px-4 py-3"
-            >
-              {countries.map((item) => (
-                <option key={item.code} value={item.code}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+            <CountrySelect defaultValue={country} className="mt-1 w-full rounded-2xl border border-line bg-bg px-4 py-3" />
             <span className="mt-1 block text-xs text-muted">Used for local streaming availability and release dates.</span>
           </label>
         </div>
@@ -104,9 +94,19 @@ export function SettingsForms({
           <input type="checkbox" name="familyMode" defaultChecked={familyMode} />
           Family mode (keeps adult TMDB search results excluded)
         </label>
-        <button disabled={pending} className="rounded-full bg-gold px-5 py-2 text-sm text-bg">
-          Save
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={pending}
+            aria-busy={pending}
+            className="rounded-full bg-gold px-5 py-2 text-sm font-medium text-bg transition duration-150 hover:brightness-110 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:cursor-wait disabled:opacity-60"
+          >
+            {pending ? "Saving…" : "Save changes"}
+          </button>
+          <p aria-live="polite" className={saveStatus === "error" ? "text-sm text-terracotta" : "text-sm text-gold"}>
+            {saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Could not save" : ""}
+          </p>
+        </div>
       </form>
 
       <section className="max-w-xl space-y-3 rounded-3xl border border-line bg-paper p-6">

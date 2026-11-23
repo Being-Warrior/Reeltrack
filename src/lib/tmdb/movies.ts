@@ -51,6 +51,7 @@ export function getPopularMoviesByRegion(country: string) {
     include_adult: "false",
     include_video: "false",
     region: country.toUpperCase(),
+    with_origin_country: country.toUpperCase(),
     sort_by: "popularity.desc",
     "vote_count.gte": 10,
     page: 1,

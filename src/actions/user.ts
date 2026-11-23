@@ -68,6 +68,9 @@ export async function updateSettings(input: z.infer<typeof settingsSchema>) {
   }
   revalidatePath("/settings");
   revalidatePath("/profile");
+  revalidatePath("/home");
+  revalidatePath("/streaming");
+  revalidatePath("/coming-soon");
   return { ok: true };
 }
 

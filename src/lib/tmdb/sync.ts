@@ -352,7 +352,15 @@ export async function ensureRecentEpisodes(titleId: string) {
   return prisma.title.findUnique({ where: { id: titleId } });
 }
 
-export async function ingestCatalog() {
+type CatalogIngestOptions = {
+  maxItems?: number;
+  enrichLimit?: number;
+  preferNew?: boolean;
+};
+
+export async function ingestCatalog(options: CatalogIngestOptions = {}) {
+  const maxItems = options.maxItems ?? Number.POSITIVE_INFINITY;
+  const enrichLimit = options.enrichLimit ?? 24;
   await syncGenres();
   const { getPopularMovies, getTrendingMovies, getNowPlayingMovies, getTopRatedMovies, getUpcomingMovies } = await import(
     "@/lib/tmdb/movies"
@@ -380,6 +388,34 @@ export async function ingestCatalog() {
   const uniqueMovies = [...new Map(movies.map((item) => [item.id, item])).values()];
   const uniqueShows = [...new Map(shows.map((item) => [item.id, item])).values()];
 
+  const existing = await prisma.title.findMany({
+    where: {
+      OR: [
+        { type: TitleType.MOVIE, tmdbId: { in: uniqueMovies.map((item) => item.id) } },
+        { type: TitleType.TV, tmdbId: { in: uniqueShows.map((item) => item.id) } },
+      ],
+    },
+    select: { tmdbId: true, type: true },
+  });
+  const existingKeys = new Set(existing.map((title) => `${title.type}:${title.tmdbId}`));
+  const preferNew = <T extends TmdbTitleListItem>(items: T[], type: TitleType) =>
+    options.preferNew
+      ? [...items].sort((a, b) =>
+          Number(existingKeys.has(`${type}:${a.id}`)) - Number(existingKeys.has(`${type}:${b.id}`)),
+        )
+      : items;
+  const movieCandidates = preferNew(uniqueMovies, TitleType.MOVIE);
+  const showCandidates = preferNew(uniqueShows, TitleType.TV);
+  const selectedMovies: TmdbTitleListItem[] = [];
+  const selectedShows: TmdbTitleListItem[] = [];
+  for (let index = 0; selectedMovies.length + selectedShows.length < maxItems; index += 1) {
+    const movie = movieCandidates[index];
+    const show = showCandidates[index];
+    if (!movie && !show) break;
+    if (movie && selectedMovies.length + selectedShows.length < maxItems) selectedMovies.push(movie);
+    if (show && selectedMovies.length + selectedShows.length < maxItems) selectedShows.push(show);
+  }
+
   async function saveCatalog(items: TmdbTitleListItem[], type: TitleType) {
     for (let index = 0; index < items.length; index += 20) {
       await Promise.all(items.slice(index, index + 20).map(async (item) => {
@@ -388,19 +424,21 @@ export async function ingestCatalog() {
       }));
     }
   }
-  await saveCatalog(uniqueMovies, TitleType.MOVIE);
-  await saveCatalog(uniqueShows, TitleType.TV);
+  await Promise.all([
+    saveCatalog(selectedMovies, TitleType.MOVIE),
+    saveCatalog(selectedShows, TitleType.TV),
+  ]);
 
   const stubs = await prisma.title.findMany({
     where: { tmdbLastSyncedAt: null },
-    take: 24,
+    take: enrichLimit,
     orderBy: { popularity: "desc" },
   });
   for (const stub of stubs) {
     await syncTitleByTmdb(stub.tmdbId, stub.type);
   }
 
-  return { movies: uniqueMovies.length, shows: uniqueShows.length };
+  return { movies: selectedMovies.length, shows: selectedShows.length };
 }
 
 export async function enrichPerson(personId: string) {

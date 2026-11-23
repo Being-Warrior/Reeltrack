@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/session";
 import { searchCatalog } from "@/lib/search";
 import type { CatalogFilters } from "@/lib/search";
 import { generateRecommendations } from "@/lib/recommendations";
+import { COUNTRY_CODE_SET } from "@/lib/countries";
 
 export async function searchAction(query: string, filters?: CatalogFilters) {
   const user = await requireUser().catch(() => null);
@@ -23,7 +24,7 @@ const settingsSchema = z.object({
   name: z.string().min(2).max(48).optional(),
   username: z.string().min(3).max(24).regex(/^[a-zA-Z0-9_]+$/).optional(),
   language: z.string().min(2).max(8).optional(),
-  country: z.string().min(2).max(8).optional(),
+  country: z.string().length(2).transform((value) => value.toUpperCase()).refine((value) => COUNTRY_CODE_SET.has(value), "Choose a valid country.").optional(),
   recommendationsEnabled: z.boolean().optional(),
   privateProfile: z.boolean().optional(),
   releaseReminders: z.boolean().optional(),

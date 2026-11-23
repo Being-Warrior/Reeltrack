@@ -5,6 +5,12 @@ import { useTransition } from "react";
 import { toast } from "sonner";
 import { logoutAction } from "@/actions/auth";
 import { deleteAccount, deleteSearchHistory, deleteWatchHistory, exportUserData, updateSettings } from "@/actions/user";
+import { COUNTRY_CODES } from "@/lib/countries";
+
+const regionNames = new Intl.DisplayNames("en", { type: "region" });
+const countries = COUNTRY_CODES
+  .map((code) => ({ code, name: regionNames.of(code) ?? code }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 export function SettingsForms({
   name,
@@ -27,6 +33,9 @@ export function SettingsForms({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const selectedCountry = COUNTRY_CODES.includes(country.toUpperCase() as (typeof COUNTRY_CODES)[number])
+    ? country.toUpperCase()
+    : "US";
 
   return (
     <div className="space-y-10">
@@ -65,7 +74,18 @@ export function SettingsForms({
           </label>
           <label className="block text-sm">
             Country
-            <input name="country" defaultValue={country} className="mt-1 w-full rounded-2xl border border-line bg-bg px-4 py-3" />
+            <select
+              name="country"
+              defaultValue={selectedCountry}
+              className="mt-1 w-full rounded-2xl border border-line bg-bg px-4 py-3"
+            >
+              {countries.map((item) => (
+                <option key={item.code} value={item.code}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-muted">Used for local streaming availability and release dates.</span>
           </label>
         </div>
         <label className="flex items-center gap-2 text-sm">

@@ -15,7 +15,8 @@ const signupSchema = z.object({
 });
 
 function appUrl() {
-  return process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+  return process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? (vercelHost ? `https://${vercelHost}` : "http://localhost:3000");
 }
 
 export async function signUpAction(_prev: { error?: string } | undefined, formData: FormData) {

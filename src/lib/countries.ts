@@ -32,3 +32,8 @@ export function countryFromLocale(locale: string | null | undefined) {
   const region = locale?.match(/[-_]([A-Za-z]{2})$/)?.[1]?.toUpperCase();
   return region && COUNTRY_CODE_SET.has(region) ? region : undefined;
 }
+
+export function countryName(code: string) {
+  const normalized = normalizeCountryCode(code);
+  return new Intl.DisplayNames("en", { type: "region" }).of(normalized) ?? normalized;
+}

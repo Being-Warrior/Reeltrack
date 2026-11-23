@@ -29,6 +29,7 @@ export default async function HomePage() {
         <TitleRow heading="Because you liked" titles={data.becauseYouLiked} compactOnMobile />
         <TitleRow heading="For you" titles={data.recommended} compactOnMobile />
         <TitleRow heading="Hidden gems" titles={data.hiddenGems} />
+        <TitleRow heading={`Popular movies in ${data.regionName}`} titles={data.popularInRegion} />
         <TitleRow heading="New in the catalog" titles={data.newThisWeek} />
       </div>
     </AppShell>

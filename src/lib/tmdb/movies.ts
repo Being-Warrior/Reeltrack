@@ -46,6 +46,17 @@ export function discoverMovies(options: {
   });
 }
 
+export function getPopularMoviesByRegion(country: string) {
+  return tmdbFetch<TmdbPaged<TmdbTitleListItem>>("/discover/movie", {
+    include_adult: "false",
+    include_video: "false",
+    region: country.toUpperCase(),
+    sort_by: "popularity.desc",
+    "vote_count.gte": 10,
+    page: 1,
+  });
+}
+
 export function getMovie(id: number) {
   return tmdbFetch<TmdbMovieDetail>(`/movie/${id}`, { append_to_response: "credits,keywords" });
 }

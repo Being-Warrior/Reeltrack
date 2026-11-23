@@ -5,9 +5,10 @@ import { getTasteProfile } from "@/lib/taste";
 import { explainTitleMatch, getActiveRecommendations } from "@/lib/recommendations";
 import { ensureRecentEpisodes, ensureTitleFresh } from "@/lib/tmdb/sync";
 import { hydratePersonIfNeeded } from "@/lib/search";
-import { getUpcomingMovies } from "@/lib/tmdb/movies";
+import { getPopularMoviesByRegion, getUpcomingMovies } from "@/lib/tmdb/movies";
 import { getUpcomingTv } from "@/lib/tmdb/tv";
-import { upsertTitleStub } from "@/lib/tmdb/sync";
+import { upsertSearchTitleStub, upsertTitleStub } from "@/lib/tmdb/sync";
+import { countryName, normalizeCountryCode } from "@/lib/countries";
 
 const titleInclude = {
   genres: { include: { genre: true } },
@@ -48,8 +49,38 @@ export async function toCards(
   );
 }
 
+async function getRegionalMovieTitles(country: string) {
+  try {
+    const result = await getPopularMoviesByRegion(country);
+    const items = result.results.slice(0, 18);
+    const existing = await prisma.title.findMany({
+      where: { type: TitleType.MOVIE, tmdbId: { in: items.map((item) => item.id) } },
+      include: titleInclude,
+    });
+    const byTmdbId = new Map(existing.map((title) => [title.tmdbId, title]));
+    const missing = items.filter((item) => !byTmdbId.has(item.id));
+    await Promise.all(missing.map((item) => upsertSearchTitleStub(item, TitleType.MOVIE)));
+    const added = missing.length === 0
+      ? []
+      : await prisma.title.findMany({
+          where: { type: TitleType.MOVIE, tmdbId: { in: missing.map((item) => item.id) } },
+          include: titleInclude,
+        });
+    for (const title of added) byTmdbId.set(title.tmdbId, title);
+    return items.flatMap((item) => {
+      const title = byTmdbId.get(item.id);
+      return title ? [title] : [];
+    });
+  } catch {
+    // This row is additive; keep Home quick and usable if TMDB is unavailable.
+    return [];
+  }
+}
+
 export async function getHomeData(userId: string) {
-  const [continueRows, recommendations, recentlyCompleted, newTitles] = await Promise.all([
+  const preference = await prisma.userPreference.findUnique({ where: { userId }, select: { country: true } });
+  const country = normalizeCountryCode(preference?.country);
+  const [continueRows, recommendations, recentlyCompleted, newTitles, regionalMovies] = await Promise.all([
     prisma.userTitleStatus.findMany({
       where: { userId, status: { in: [WatchStatus.WATCHING, WatchStatus.PAUSED] } },
       include: { title: { include: titleInclude } },
@@ -69,6 +100,7 @@ export async function getHomeData(userId: string) {
       orderBy: { releaseDate: "desc" },
       take: 18,
     }),
+    getRegionalMovieTitles(country),
   ]);
 
   const allTitles = [
@@ -76,6 +108,7 @@ export async function getHomeData(userId: string) {
     ...recommendations.map((row) => row.title),
     ...newTitles,
     ...recentlyCompleted.map((row) => row.title),
+    ...regionalMovies,
   ];
   const extras = await getUserTitleExtras(userId, allTitles.map((title) => title.id));
   const availableRecommendations = recommendations.filter(
@@ -95,6 +128,16 @@ export async function getHomeData(userId: string) {
   const availableNewTitles = newTitles.filter(
     (title) => !extras.statusById.has(title.id) && !extras.favoriteIds.has(title.id),
   );
+  const alreadyShown = new Set([
+    ...continueRows.map((row) => row.titleId),
+    ...becauseYouLiked.map((row) => row.titleId),
+    ...hiddenGems.map((row) => row.titleId),
+    ...forYou.map((row) => row.titleId),
+    ...availableNewTitles.map((title) => title.id),
+  ]);
+  const availableRegionalMovies = regionalMovies.filter(
+    (title) => !extras.statusById.has(title.id) && !extras.favoriteIds.has(title.id) && !alreadyShown.has(title.id),
+  );
 
   return {
     continueWatching: await toCards(
@@ -110,6 +153,8 @@ export async function getHomeData(userId: string) {
     recommended: await toCards(recTitles, extras),
     recReasons: Object.fromEntries(forYou.map((row) => [row.titleId, row.reason])),
     newThisWeek: await toCards(availableNewTitles, extras),
+    popularInRegion: await toCards(availableRegionalMovies.slice(0, 12), extras),
+    regionName: countryName(country),
     lastLoved: recentlyCompleted[0]?.title.title ?? null,
   };
 }

@@ -3,8 +3,10 @@ export async function sendTransactionalEmail(to: string, subject: string, html: 
   const from = process.env.EMAIL_FROM ?? "ReelTrack <noreply@reeltrack.app>";
 
   if (!apiKey) {
-    console.info("[reeltrack:email]", { to, subject, html });
-    return { delivered: false, logged: true };
+    if (process.env.NODE_ENV === "development") {
+      console.info("[reeltrack:email]", { to, subject, html });
+    }
+    return { delivered: false, logged: process.env.NODE_ENV === "development" };
   }
 
   const response = await fetch("https://api.resend.com/emails", {
@@ -21,6 +23,10 @@ export async function sendTransactionalEmail(to: string, subject: string, html: 
   }
 
   return { delivered: true, logged: false };
+}
+
+export function isTransactionalEmailConfigured() {
+  return Boolean(process.env.RESEND_API_KEY);
 }
 
 export function verificationEmailHtml(url: string) {

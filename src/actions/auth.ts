@@ -6,7 +6,7 @@ import { AuthError } from "next-auth";
 import { z } from "zod";
 import { signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
-import { resetEmailHtml, sendTransactionalEmail, verificationEmailHtml } from "@/lib/email";
+import { isTransactionalEmailConfigured, resetEmailHtml, sendTransactionalEmail, verificationEmailHtml } from "@/lib/email";
 
 const signupSchema = z.object({
   name: z.string().min(2).max(48),
@@ -99,6 +99,9 @@ export async function requestPasswordReset(emailRaw: string) {
   const email = emailRaw.toLowerCase().trim();
   const parsed = z.string().email().safeParse(email);
   if (!parsed.success) return { error: "Enter a valid email." };
+  if (!isTransactionalEmailConfigured()) {
+    return { error: "Password-reset email is not configured yet. Sign in with Google or contact the site owner." };
+  }
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) return { ok: true };
   const token = randomBytes(32).toString("hex");

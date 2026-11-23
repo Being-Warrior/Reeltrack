@@ -7,6 +7,8 @@ import { getShowsByProvider, getStreamingProviders } from "@/lib/tmdb/tv";
 import { upsertSearchTitleStub } from "@/lib/tmdb/sync";
 import { providerLogoUrl } from "@/lib/tmdb/images";
 import { Title, TitleType } from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { TMDB_PAGE_AUXILIARY_TIMEOUT_MS } from "@/lib/constants";
 
 export default async function StreamingPage({ searchParams }: { searchParams: Promise<{ provider?: string }> }) {
   const user = await requireUser();
@@ -15,13 +17,24 @@ export default async function StreamingPage({ searchParams }: { searchParams: Pr
   const providerId = Number(provider);
   let providers: Array<{ provider_id: number; provider_name: string; logo_path: string | null }> = [];
   let shows: Title[] = [];
-  try {
-    const providerData = await getStreamingProviders(country);
-    providers = providerData.results;
-    const data = await getShowsByProvider(country, Number.isInteger(providerId) && providerId > 0 ? providerId : undefined);
-    shows = await Promise.all(data.results.slice(0, 30).map((item) => upsertSearchTitleStub(item, TitleType.TV)));
-  } catch {
-    // Provider availability is external; keep the page usable if TMDB is temporarily unavailable.
+  const selectedProviderId = Number.isInteger(providerId) && providerId > 0 ? providerId : undefined;
+  const [providerResult, showResult] = await Promise.allSettled([
+    getStreamingProviders(country, TMDB_PAGE_AUXILIARY_TIMEOUT_MS),
+    getShowsByProvider(country, selectedProviderId, TMDB_PAGE_AUXILIARY_TIMEOUT_MS),
+  ]);
+  if (providerResult.status === "fulfilled") providers = providerResult.value.results;
+  if (showResult.status === "fulfilled") {
+    const items = showResult.value.results.slice(0, 18);
+    const existing = await prisma.title.findMany({
+      where: { type: TitleType.TV, tmdbId: { in: items.map((item) => item.id) } },
+    });
+    const knownIds = new Set(existing.map((show) => show.tmdbId));
+    const added = await Promise.all(items.filter((item) => !knownIds.has(item.id)).map((item) => upsertSearchTitleStub(item, TitleType.TV)));
+    const byTmdbId = new Map([...existing, ...added].map((show) => [show.tmdbId, show]));
+    shows = items.flatMap((item) => {
+      const show = byTmdbId.get(item.id);
+      return show ? [show] : [];
+    });
   }
   const extras = await getUserTitleExtras(user.id, shows.map((show) => show.id));
   const cards = await toCards(shows, extras);

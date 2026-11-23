@@ -6,6 +6,7 @@ import { searchPeople } from "@/lib/tmdb/people";
 import { searchTv } from "@/lib/tmdb/tv";
 import { upsertSearchTitleStub, syncTitleByTmdb } from "@/lib/tmdb/sync";
 import { getPerson } from "@/lib/tmdb/people";
+import { TMDB_INTERACTIVE_TIMEOUT_MS } from "@/lib/constants";
 
 export type CatalogFilters = {
   type?: TitleType;
@@ -57,9 +58,9 @@ export async function searchCatalog(query: string, filters: CatalogFilters = {})
 
   try {
     const [movieResult, tvResult, peopleResult] = await Promise.allSettled([
-      searchMovies(query),
-      searchTv(query),
-      searchPeople(query),
+      searchMovies(query, 1, TMDB_INTERACTIVE_TIMEOUT_MS),
+      searchTv(query, 1, TMDB_INTERACTIVE_TIMEOUT_MS),
+      searchPeople(query, 1, TMDB_INTERACTIVE_TIMEOUT_MS),
     ]);
     const movieResults = movieResult.status === "fulfilled" ? movieResult.value.results : [];
     const tvResults = tvResult.status === "fulfilled" ? tvResult.value.results : [];

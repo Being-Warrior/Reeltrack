@@ -50,19 +50,19 @@ export function discoverTv(options: {
   });
 }
 
-export function getStreamingProviders(country: string) {
+export function getStreamingProviders(country: string, timeoutMs?: number) {
   return tmdbFetch<{ results: Array<{ provider_id: number; provider_name: string; logo_path: string | null }> }>("/watch/providers/tv", {
     watch_region: country.toUpperCase(),
-  });
+  }, 0, timeoutMs);
 }
 
-export function getShowsByProvider(country: string, providerId?: number) {
+export function getShowsByProvider(country: string, providerId?: number, timeoutMs?: number) {
   return tmdbFetch<TmdbPaged<TmdbTitleListItem>>("/discover/tv", {
     watch_region: country.toUpperCase(),
     with_watch_monetization_types: "flatrate",
     with_watch_providers: providerId,
     sort_by: "popularity.desc",
-  });
+  }, 0, timeoutMs);
 }
 
 export function getTv(id: number) {

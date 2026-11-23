@@ -5,10 +5,10 @@ import { getTasteProfile } from "@/lib/taste";
 import { explainTitleMatch, getActiveRecommendations } from "@/lib/recommendations";
 import { ensureRecentEpisodes, ensureTitleFresh } from "@/lib/tmdb/sync";
 import { hydratePersonIfNeeded } from "@/lib/search";
-import { getPopularMoviesByRegion, getUpcomingMovies } from "@/lib/tmdb/movies";
-import { getUpcomingTv } from "@/lib/tmdb/tv";
-import { upsertSearchTitleStub, upsertTitleStub } from "@/lib/tmdb/sync";
+import { getPopularMoviesByRegion } from "@/lib/tmdb/movies";
+import { upsertSearchTitleStub } from "@/lib/tmdb/sync";
 import { countryName, normalizeCountryCode } from "@/lib/countries";
+import { TMDB_PAGE_AUXILIARY_TIMEOUT_MS } from "@/lib/constants";
 
 const titleInclude = {
   genres: { include: { genre: true } },
@@ -51,7 +51,7 @@ export async function toCards(
 
 async function getRegionalMovieTitles(country: string) {
   try {
-    const result = await getPopularMoviesByRegion(country);
+    const result = await getPopularMoviesByRegion(country, TMDB_PAGE_AUXILIARY_TIMEOUT_MS);
     const items = result.results.slice(0, 18);
     const existing = await prisma.title.findMany({
       where: { type: TitleType.MOVIE, tmdbId: { in: items.map((item) => item.id) } },
@@ -229,26 +229,8 @@ export async function getLibrary(userId: string, status: WatchStatus) {
 export async function getComingSoon(userId: string) {
   const now = new Date();
   const end = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
-  const from = now.toISOString().slice(0, 10);
-  const to = end.toISOString().slice(0, 10);
-  try {
-    const pages = await Promise.all([
-      getUpcomingMovies(1), getUpcomingMovies(2), getUpcomingMovies(3),
-      getUpcomingTv(from, to, 1), getUpcomingTv(from, to, 2), getUpcomingTv(from, to, 3),
-    ]);
-    const movieItems = [...new Map(
-      pages.slice(0, 3).flatMap((page) => page.results).map((title) => [title.id, title]),
-    ).values()];
-    const seriesItems = [...new Map(
-      pages.slice(3).flatMap((page) => page.results).map((title) => [title.id, title]),
-    ).values()];
-    await Promise.all([
-      ...movieItems.map((title) => upsertTitleStub(title, TitleType.MOVIE)),
-      ...seriesItems.map((title) => upsertTitleStub(title, TitleType.TV)),
-    ]);
-  } catch {
-    // The existing local catalog remains available if TMDB is temporarily unreachable.
-  }
+  // Upcoming titles are refreshed by the scheduled catalog job. Reading the local
+  // catalog here avoids six network calls and dozens of writes on every page view.
   const [titles, favorites, watched, preferences] = await Promise.all([
     prisma.title.findMany({
       where: { releaseDate: { gte: now, lte: end } },

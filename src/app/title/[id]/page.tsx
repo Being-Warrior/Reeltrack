@@ -16,6 +16,7 @@ import { prisma } from "@/lib/db";
 import { backdropUrl, profileUrl, stillUrl } from "@/lib/tmdb/images";
 import { formatRuntime, yearFromDate } from "@/lib/utils";
 import { getStreamingProviders, getTrailer } from "@/lib/tmdb/extras";
+import { TMDB_PAGE_AUXILIARY_TIMEOUT_MS } from "@/lib/constants";
 
 export default async function TitlePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -28,8 +29,8 @@ export default async function TitlePage({ params }: { params: Promise<{ id: stri
   const cast = title.credits.filter((credit) => credit.creditType === CreditType.CAST).slice(0, 12);
   const crew = title.credits.filter((credit) => credit.creditType === CreditType.CREW).slice(0, 8);
   const [providers, trailer] = await Promise.all([
-    getStreamingProviders(title.type, title.tmdbId, user?.preferences?.country ?? "US").catch(() => null),
-    getTrailer(title.type, title.tmdbId).catch(() => null),
+    getStreamingProviders(title.type, title.tmdbId, user?.preferences?.country ?? "US", TMDB_PAGE_AUXILIARY_TIMEOUT_MS).catch(() => null),
+    getTrailer(title.type, title.tmdbId, TMDB_PAGE_AUXILIARY_TIMEOUT_MS).catch(() => null),
   ]);
 
   const content = (

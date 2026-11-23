@@ -46,7 +46,7 @@ export function discoverMovies(options: {
   });
 }
 
-export function getPopularMoviesByRegion(country: string) {
+export function getPopularMoviesByRegion(country: string, timeoutMs?: number) {
   return tmdbFetch<TmdbPaged<TmdbTitleListItem>>("/discover/movie", {
     include_adult: "false",
     include_video: "false",
@@ -55,7 +55,7 @@ export function getPopularMoviesByRegion(country: string) {
     sort_by: "popularity.desc",
     "vote_count.gte": 10,
     page: 1,
-  });
+  }, 0, timeoutMs);
 }
 
 export function getMovie(id: number) {

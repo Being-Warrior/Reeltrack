@@ -11,6 +11,8 @@ export const RATING_STEP = 0.5;
 
 export const SEARCH_DEBOUNCE_MS = 280;
 export const SEARCH_MIN_CHARS = 2;
+export const TMDB_INTERACTIVE_TIMEOUT_MS = 2_500;
+export const TMDB_PAGE_AUXILIARY_TIMEOUT_MS = 1_500;
 
 export const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
 

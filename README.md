@@ -40,6 +40,6 @@ ReelTrack is ready to deploy as a personal project using GitHub, Vercel, and Neo
 1. Create a Neon database and copy its pooled PostgreSQL connection string into Vercel as `DATABASE_URL`.
 2. Import the GitHub repository in Vercel. The included `vercel.json` refreshes the catalog and release reminders daily at 4:00 AM India Standard Time (22:30 UTC).
 3. Add the following Vercel Production environment variables: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL` (your `https://...vercel.app` URL), `CRON_SECRET`, and either `TMDB_API_KEY` or `TMDB_ACCESS_TOKEN`. Add the Google and Resend variables only when those integrations are configured.
-4. Run `npx prisma migrate deploy` once against the Neon database, then open `/api/health` on the deployed app to verify the database connection.
+4. Run `npx prisma migrate deploy` once against Neon using its direct (non-pooled) connection string, then open `/api/health` on the deployed app to verify the database connection. Do not put migrations in Vercel's build command: Prisma's advisory lock can time out through a pooled serverless connection.
 
 Never commit `.env` or production credentials. The cron route only accepts Vercel's `Authorization: Bearer <CRON_SECRET>` request.

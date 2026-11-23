@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0b0b0c;
+  --paper: #141312;
+  --raised: #1c1a18;
+  --ink: #f6f1e8;
+  --muted: #9b9388;
+  --line: rgba(246, 241, 232, 0.08);
+  --gold: #d8b07a;
+  --terracotta: #c45c3e;
+  --ok: #7d9a6f;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-paper: var(--paper);
+  --color-raised: var(--raised);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-gold: var(--gold);
+  --color-terracotta: var(--terracotta);
+  --font-sans: var(--font-sora);
+  --font-serif: var(--font-fraunces);
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-sora), system-ui, sans-serif;
+  background-image:
+    radial-gradient(1200px 500px at 10% -10%, rgba(216, 176, 122, 0.08), transparent 50%),
+    radial-gradient(800px 400px at 100% 0%, rgba(196, 92, 62, 0.08), transparent 45%);
+}
+
+::selection {
+  background: rgba(216, 176, 122, 0.35);
+}
+
+a {
+  color: inherit;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

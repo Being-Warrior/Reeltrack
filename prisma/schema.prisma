@@ -1,0 +1,515 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TitleType {
+  MOVIE
+  TV
+}
+
+enum WatchStatus {
+  WATCHLIST
+  WATCHING
+  COMPLETED
+  PAUSED
+  DROPPED
+}
+
+enum CreditType {
+  CAST
+  CREW
+}
+
+enum PreferenceSource {
+  ONBOARDING
+  RATING
+  WATCH_HISTORY
+  FAVORITE
+  BEHAVIOR
+}
+
+enum RecommendationEventType {
+  IMPRESSION
+  CLICK
+  WATCHLIST
+  WATCHED
+  DISMISSED
+}
+
+enum UpcomingReleaseKind {
+  MOVIE
+  SEASON
+  EPISODE
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  username      String?   @unique
+  name          String?   @map("display_name")
+  image         String?   @map("avatar_url")
+  passwordHash  String?   @map("password_hash")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  accounts               Account[]
+  sessions               Session[]
+  preferences            UserPreference?
+  titleStatuses          UserTitleStatus[]
+  ratings                Rating[]
+  favorites              Favorite[]
+  collections            Collection[]
+  genrePreferences       UserGenrePreference[]
+  recommendations        Recommendation[]
+  recommendationEvents   RecommendationEvent[]
+  searchHistory          SearchHistory[]
+  upcomingReleases       UpcomingRelease[]
+  episodeProgress        EpisodeProgress[]
+  notifications          Notification[]
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model UserPreference {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique @map("user_id")
+  language               String   @default("en")
+  country                String   @default("US")
+  onboardingCompleted    Boolean  @default(false) @map("onboarding_completed")
+  recommendationsEnabled Boolean  @default(true) @map("recommendations_enabled")
+  privateProfile         Boolean  @default(true) @map("private_profile")
+  releaseReminders       Boolean  @default(true) @map("release_reminders")
+  familyMode             Boolean  @default(false) @map("family_mode")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model Title {
+  id              String    @id @default(uuid())
+  tmdbId          Int       @map("tmdb_id")
+  type            TitleType
+  title           String
+  originalTitle   String?   @map("original_title")
+  tagline         String?
+  overview        String?   @db.Text
+  releaseDate     DateTime? @map("release_date") @db.Date
+  runtime         Int?
+  originalLanguage String?  @map("original_language")
+  posterPath      String?   @map("poster_path")
+  backdropPath    String?   @map("backdrop_path")
+  status          String?
+  popularity      Float     @default(0)
+  voteAverage     Float     @default(0) @map("vote_average")
+  voteCount       Int       @default(0) @map("vote_count")
+  tmdbLastSyncedAt DateTime? @map("tmdb_last_synced_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  genres             TitleGenre[]
+  keywords           TitleKeyword[]
+  credits            TitleCredit[]
+  seasons            Season[]
+  userStatuses       UserTitleStatus[]
+  ratings            Rating[]
+  favorites          Favorite[]
+  collectionItems    CollectionItem[]
+  recommendations    Recommendation[]
+  upcomingSource     UpcomingRelease[] @relation("UpcomingSource")
+  upcomingRelated    UpcomingRelease[] @relation("UpcomingRelated")
+
+  @@unique([tmdbId, type])
+  @@index([tmdbId])
+  @@index([type])
+  @@index([title])
+  @@index([releaseDate])
+  @@index([popularity])
+  @@index([voteAverage])
+  @@map("titles")
+}
+
+model Genre {
+  id        String   @id @default(uuid())
+  tmdbId    Int      @unique @map("tmdb_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  titles      TitleGenre[]
+  preferences UserGenrePreference[]
+
+  @@map("genres")
+}
+
+model TitleGenre {
+  titleId String @map("title_id")
+  genreId String @map("genre_id")
+
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, genreId])
+  @@index([titleId])
+  @@index([genreId])
+  @@map("title_genres")
+}
+
+model Keyword {
+  id        String   @id @default(uuid())
+  tmdbId    Int      @unique @map("tmdb_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  titles TitleKeyword[]
+
+  @@map("keywords")
+}
+
+model TitleKeyword {
+  titleId   String @map("title_id")
+  keywordId String @map("keyword_id")
+
+  title   Title   @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  keyword Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, keywordId])
+  @@index([titleId])
+  @@index([keywordId])
+  @@map("title_keywords")
+}
+
+model Person {
+  id                 String    @id @default(uuid())
+  tmdbId             Int       @unique @map("tmdb_id")
+  name               String
+  biography          String?   @db.Text
+  profilePath        String?   @map("profile_path")
+  knownForDepartment String?   @map("known_for_department")
+  birthday           DateTime? @db.Date
+  deathday           DateTime? @db.Date
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  credits TitleCredit[]
+
+  @@index([tmdbId])
+  @@index([name])
+  @@map("people")
+}
+
+model TitleCredit {
+  id         String     @id @default(uuid())
+  titleId    String     @map("title_id")
+  personId   String     @map("person_id")
+  creditType CreditType @map("credit_type")
+  character  String?
+  job        String?
+  department String?
+  castOrder  Int?       @map("cast_order")
+
+  title  Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([titleId])
+  @@index([personId])
+  @@index([titleId, creditType])
+  @@map("title_credits")
+}
+
+model Season {
+  id           String    @id @default(uuid())
+  titleId      String    @map("title_id")
+  tmdbId       Int       @map("tmdb_id")
+  seasonNumber Int       @map("season_number")
+  name         String
+  overview     String?   @db.Text
+  airDate      DateTime? @map("air_date") @db.Date
+  episodeCount Int       @default(0) @map("episode_count")
+  posterPath   String?   @map("poster_path")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  title    Title     @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episodes Episode[]
+
+  @@unique([titleId, seasonNumber])
+  @@index([titleId])
+  @@map("seasons")
+}
+
+model Episode {
+  id            String    @id @default(uuid())
+  seasonId      String    @map("season_id")
+  tmdbId        Int       @map("tmdb_id")
+  episodeNumber Int       @map("episode_number")
+  name          String
+  overview      String?   @db.Text
+  airDate       DateTime? @map("air_date") @db.Date
+  runtime       Int?
+  stillPath     String?   @map("still_path")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  progress EpisodeProgress[]
+
+  @@unique([seasonId, episodeNumber])
+  @@index([seasonId])
+  @@map("episodes")
+}
+
+model EpisodeProgress {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  episodeId   String   @map("episode_id")
+  completedAt DateTime @default(now()) @map("completed_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, episodeId])
+  @@index([userId])
+  @@index([episodeId])
+  @@map("episode_progress")
+}
+
+model UserTitleStatus {
+  id          String      @id @default(uuid())
+  userId      String      @map("user_id")
+  titleId     String      @map("title_id")
+  status      WatchStatus
+  startedAt   DateTime?   @map("started_at")
+  completedAt DateTime?   @map("completed_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, titleId])
+  @@index([userId])
+  @@index([titleId])
+  @@index([userId, status])
+  @@map("user_title_status")
+}
+
+model Rating {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  titleId   String   @map("title_id")
+  rating    Decimal  @db.Decimal(2, 1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, titleId])
+  @@index([userId])
+  @@index([titleId])
+  @@map("ratings")
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  titleId   String   @map("title_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, titleId])
+  @@index([userId])
+  @@index([titleId])
+  @@map("favorites")
+}
+
+model Collection {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  description String?  @db.Text
+  isPrivate   Boolean  @default(true) @map("is_private")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CollectionItem[]
+
+  @@index([userId])
+  @@map("collections")
+}
+
+model CollectionItem {
+  id           String   @id @default(uuid())
+  collectionId String   @map("collection_id")
+  titleId      String   @map("title_id")
+  position     Int      @default(0)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  title      Title      @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, titleId])
+  @@index([collectionId])
+  @@index([titleId])
+  @@map("collection_items")
+}
+
+model UserGenrePreference {
+  id        String            @id @default(uuid())
+  userId    String            @map("user_id")
+  genreId   String            @map("genre_id")
+  score     Float
+  source    PreferenceSource
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, genreId, source])
+  @@index([userId])
+  @@index([genreId])
+  @@map("user_genre_preferences")
+}
+
+model Recommendation {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  titleId          String    @map("title_id")
+  score            Float
+  reason           String
+  algorithmVersion String    @map("algorithm_version")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  expiresAt        DateTime  @map("expires_at")
+
+  user   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title  Title                  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  events RecommendationEvent[]
+
+  @@index([userId])
+  @@index([userId, expiresAt])
+  @@index([titleId])
+  @@map("recommendations")
+}
+
+model RecommendationEvent {
+  id               String                   @id @default(uuid())
+  userId           String                   @map("user_id")
+  recommendationId String                   @map("recommendation_id")
+  eventType        RecommendationEventType  @map("event_type")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recommendation Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([recommendationId])
+  @@map("recommendation_events")
+}
+
+model SearchHistory {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  query     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@map("search_history")
+}
+
+model UpcomingRelease {
+  id             String              @id @default(uuid())
+  userId         String              @map("user_id")
+  sourceTitleId  String              @map("source_title_id")
+  relatedTitleId String?             @map("related_title_id")
+  kind           UpcomingReleaseKind
+  externalKey    String              @map("external_key")
+  title          String
+  subtitle       String?
+  releaseDate    DateTime            @map("release_date") @db.Date
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceTitle  Title  @relation("UpcomingSource", fields: [sourceTitleId], references: [id], onDelete: Cascade)
+  relatedTitle Title? @relation("UpcomingRelated", fields: [relatedTitleId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, externalKey])
+  @@index([userId, releaseDate])
+  @@map("upcoming_releases")
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  externalKey String    @map("external_key")
+  title       String
+  body        String
+  href        String?
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, externalKey])
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}

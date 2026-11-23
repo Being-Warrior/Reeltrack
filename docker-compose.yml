@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: reeltrack-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reeltrack
+      POSTGRES_PASSWORD: reeltrack
+      POSTGRES_DB: reeltrack
+    ports:
+      - "5432:5432"
+    volumes:
+      - reeltrack_pgdata:/var/lib/postgresql/data
+
+volumes:
+  reeltrack_pgdata:

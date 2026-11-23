@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   try {
     // Keep the serverless job below Vercel's execution limit. Each run prioritises
     // titles not yet in the catalog and alternates films with series.
-    const catalog = await ingestCatalog({ maxItems: 60, enrichLimit: 0, preferNew: true });
+    const catalog = await ingestCatalog({ maxItems: 24, enrichLimit: 0, preferNew: true });
     const upcoming = await runUpcomingSync();
     return NextResponse.json({ ok: true, catalog, upcoming, completedAt: new Date().toISOString() });
   } catch (error) {

@@ -29,6 +29,23 @@ export function getUpcomingMovies(page = 1) {
   return tmdbFetch<TmdbPaged<TmdbTitleListItem>>("/movie/upcoming", { page });
 }
 
+export function discoverMovies(options: {
+  originalLanguage: string;
+  region: string;
+  year: number;
+  page?: number;
+}) {
+  return tmdbFetch<TmdbPaged<TmdbTitleListItem>>("/discover/movie", {
+    include_adult: "false",
+    include_video: "false",
+    with_original_language: options.originalLanguage,
+    region: options.region,
+    primary_release_year: options.year,
+    sort_by: "popularity.desc",
+    page: options.page ?? 1,
+  });
+}
+
 export function getMovie(id: number) {
   return tmdbFetch<TmdbMovieDetail>(`/movie/${id}`, { append_to_response: "credits,keywords" });
 }

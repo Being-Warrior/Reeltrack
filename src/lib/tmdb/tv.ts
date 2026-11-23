@@ -34,6 +34,22 @@ export function getUpcomingTv(from: string, to: string, page = 1) {
   });
 }
 
+export function discoverTv(options: {
+  originalLanguage: string;
+  originCountry: string;
+  year: number;
+  page?: number;
+}) {
+  return tmdbFetch<TmdbPaged<TmdbTitleListItem>>("/discover/tv", {
+    include_adult: "false",
+    with_original_language: options.originalLanguage,
+    with_origin_country: options.originCountry,
+    first_air_date_year: options.year,
+    sort_by: "popularity.desc",
+    page: options.page ?? 1,
+  });
+}
+
 export function getStreamingProviders(country: string) {
   return tmdbFetch<{ results: Array<{ provider_id: number; provider_name: string; logo_path: string | null }> }>("/watch/providers/tv", {
     watch_region: country.toUpperCase(),

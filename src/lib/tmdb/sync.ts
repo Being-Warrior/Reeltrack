@@ -37,10 +37,10 @@ async function upsertPerson(member: TmdbCastMember | TmdbCrewMember) {
 }
 
 async function attachGenres(titleId: string, genreIds: number[]) {
+  await prisma.titleGenre.deleteMany({ where: { titleId } });
   if (genreIds.length === 0) return;
   const genres = await prisma.genre.findMany({ where: { tmdbId: { in: genreIds } } });
   if (genres.length === 0) return;
-  await prisma.titleGenre.deleteMany({ where: { titleId } });
   await prisma.titleGenre.createMany({
     data: genres.map((genre) => ({ titleId, genreId: genre.id })),
     skipDuplicates: true,
@@ -48,6 +48,7 @@ async function attachGenres(titleId: string, genreIds: number[]) {
 }
 
 async function attachKeywords(titleId: string, keywords: { id: number; name: string }[]) {
+  await prisma.titleKeyword.deleteMany({ where: { titleId } });
   if (keywords.length === 0) return;
   await prisma.$transaction(
     keywords.map((keyword) =>
@@ -61,7 +62,6 @@ async function attachKeywords(titleId: string, keywords: { id: number; name: str
   const stored = await prisma.keyword.findMany({
     where: { tmdbId: { in: keywords.map((keyword) => keyword.id) } },
   });
-  await prisma.titleKeyword.deleteMany({ where: { titleId } });
   await prisma.titleKeyword.createMany({
     data: stored.map((keyword) => ({ titleId, keywordId: keyword.id })),
     skipDuplicates: true,
@@ -356,32 +356,101 @@ type CatalogIngestOptions = {
   maxItems?: number;
   enrichLimit?: number;
   preferNew?: boolean;
+  worldwide?: boolean;
+  now?: Date;
 };
+
+type CatalogMarket = {
+  language: string;
+  country: string;
+};
+
+// A rotating mix keeps the stored catalog useful outside the US/English charts.
+// These markets are intentionally spread across regions and writing systems.
+const CATALOG_MARKETS: CatalogMarket[] = [
+  { language: "en", country: "US" },
+  { language: "hi", country: "IN" },
+  { language: "ta", country: "IN" },
+  { language: "te", country: "IN" },
+  { language: "ml", country: "IN" },
+  { language: "bn", country: "IN" },
+  { language: "ja", country: "JP" },
+  { language: "ko", country: "KR" },
+  { language: "zh", country: "TW" },
+  { language: "es", country: "ES" },
+  { language: "es", country: "MX" },
+  { language: "pt", country: "BR" },
+  { language: "fr", country: "FR" },
+  { language: "de", country: "DE" },
+  { language: "it", country: "IT" },
+  { language: "tr", country: "TR" },
+  { language: "ar", country: "EG" },
+  { language: "id", country: "ID" },
+  { language: "th", country: "TH" },
+  { language: "ru", country: "RU" },
+  { language: "pl", country: "PL" },
+];
+
+function catalogRotation(now: Date, lanes = 3) {
+  const day = Math.floor(now.getTime() / (1000 * 60 * 60 * 24));
+  const currentYear = now.getUTCFullYear();
+  const yearCount = Math.max(1, currentYear - 1950 + 1);
+
+  return Array.from({ length: lanes }, (_, lane) => {
+    const offset = day * lanes + lane;
+    return {
+      market: CATALOG_MARKETS[offset % CATALOG_MARKETS.length],
+      // Over time this traverses recent and classic decades instead of repeatedly
+      // saving only the current releases from each country.
+      year: currentYear - (Math.floor(offset / CATALOG_MARKETS.length) % yearCount),
+      page: (Math.floor(offset / (CATALOG_MARKETS.length * yearCount)) % 5) + 1,
+    };
+  });
+}
 
 export async function ingestCatalog(options: CatalogIngestOptions = {}) {
   const maxItems = options.maxItems ?? Number.POSITIVE_INFINITY;
   const enrichLimit = options.enrichLimit ?? 24;
   await syncGenres();
-  const { getPopularMovies, getTrendingMovies, getNowPlayingMovies, getTopRatedMovies, getUpcomingMovies } = await import(
+  const { discoverMovies, getPopularMovies, getTrendingMovies, getNowPlayingMovies, getTopRatedMovies, getUpcomingMovies } = await import(
     "@/lib/tmdb/movies"
   );
-  const { getPopularTv, getTrendingTv, getTopRatedTv, getOnTheAirTv } = await import("@/lib/tmdb/tv");
+  const { discoverTv, getPopularTv, getTrendingTv, getTopRatedTv, getOnTheAirTv } = await import("@/lib/tmdb/tv");
   const pages = (count: number) => Array.from({ length: count }, (_, index) => index + 1);
+  let movieLists: Awaited<ReturnType<typeof getPopularMovies>>[];
+  let showLists: Awaited<ReturnType<typeof getPopularTv>>[];
 
-  const lists = await Promise.all([
-    ...pages(5).map(getPopularMovies),
-    getTrendingMovies(),
-    ...pages(3).map(getNowPlayingMovies),
-    ...pages(3).map(getUpcomingMovies),
-    ...pages(3).map(getTopRatedMovies),
-    ...pages(5).map(getPopularTv),
-    getTrendingTv(),
-    ...pages(3).map(getTopRatedTv),
-    ...pages(5).map(getOnTheAirTv),
-  ]);
-
-  const movieLists = lists.slice(0, 15);
-  const showLists = lists.slice(15);
+  if (options.worldwide) {
+    const rotations = catalogRotation(options.now ?? new Date());
+    const [popularMovie, trendingMovie, upcomingMovie, popularTv, trendingTv, onTheAirTv, ...regional] = await Promise.all([
+      getPopularMovies(),
+      getTrendingMovies(),
+      getUpcomingMovies(),
+      getPopularTv(),
+      getTrendingTv(),
+      getOnTheAirTv(),
+      ...rotations.flatMap(({ market, year, page }) => [
+        discoverMovies({ originalLanguage: market.language, region: market.country, year, page }),
+        discoverTv({ originalLanguage: market.language, originCountry: market.country, year, page }),
+      ]),
+    ]);
+    movieLists = [popularMovie, trendingMovie, upcomingMovie, ...regional.filter((_, index) => index % 2 === 0)];
+    showLists = [popularTv, trendingTv, onTheAirTv, ...regional.filter((_, index) => index % 2 === 1)];
+  } else {
+    const lists = await Promise.all([
+      ...pages(5).map(getPopularMovies),
+      getTrendingMovies(),
+      ...pages(3).map(getNowPlayingMovies),
+      ...pages(3).map(getUpcomingMovies),
+      ...pages(3).map(getTopRatedMovies),
+      ...pages(5).map(getPopularTv),
+      getTrendingTv(),
+      ...pages(3).map(getTopRatedTv),
+      ...pages(5).map(getOnTheAirTv),
+    ]);
+    movieLists = lists.slice(0, 15);
+    showLists = lists.slice(15);
+  }
   const movies = movieLists.flatMap((page) => page.results);
   const shows = showLists.flatMap((page) => page.results);
 

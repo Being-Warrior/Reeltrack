@@ -58,6 +58,18 @@ export function getPopularMoviesByRegion(country: string, timeoutMs?: number) {
   }, 0, timeoutMs);
 }
 
+export function getTopRatedMoviesByRegion(country: string, timeoutMs?: number) {
+  return tmdbFetch<TmdbPaged<TmdbTitleListItem>>("/discover/movie", {
+    include_adult: "false",
+    include_video: "false",
+    region: country.toUpperCase(),
+    with_origin_country: country.toUpperCase(),
+    "vote_count.gte": 50,
+    sort_by: "vote_average.desc",
+    page: 1,
+  }, 0, timeoutMs);
+}
+
 export function getMovie(id: number) {
   return tmdbFetch<TmdbMovieDetail>(`/movie/${id}`, { append_to_response: "credits,keywords" });
 }

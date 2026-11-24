@@ -2,6 +2,7 @@ import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { ingestCatalog } from "@/lib/tmdb/sync";
 import { runUpcomingSync } from "@/lib/upcoming-sync";
+import { refreshDueRegionalMovieFeeds } from "@/lib/regional-feeds";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -24,7 +25,8 @@ export async function GET(request: NextRequest) {
     // unseen titles and rotates international markets, years, films, and series.
     const catalog = await ingestCatalog({ maxItems: 24, enrichLimit: 2, preferNew: true, worldwide: true });
     const upcoming = await runUpcomingSync();
-    return NextResponse.json({ ok: true, catalog, upcoming, completedAt: new Date().toISOString() });
+    const regionalFeeds = await refreshDueRegionalMovieFeeds(1).catch(() => []);
+    return NextResponse.json({ ok: true, catalog, upcoming, regionalFeeds, completedAt: new Date().toISOString() });
   } catch (error) {
     console.error("Scheduled catalog refresh failed", error);
     return NextResponse.json({ ok: false }, { status: 500 });

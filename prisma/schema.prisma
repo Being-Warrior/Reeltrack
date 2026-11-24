@@ -47,6 +47,10 @@ enum UpcomingReleaseKind {
   EPISODE
 }
 
+enum RegionalFeedKind {
+  POPULAR_MOVIES
+}
+
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
@@ -169,6 +173,7 @@ model Title {
   recommendations    Recommendation[]
   upcomingSource     UpcomingRelease[] @relation("UpcomingSource")
   upcomingRelated    UpcomingRelease[] @relation("UpcomingRelated")
+  regionalFeedItems  RegionalFeedItem[]
 
   @@unique([tmdbId, type])
   @@index([tmdbId])
@@ -178,6 +183,39 @@ model Title {
   @@index([popularity])
   @@index([voteAverage])
   @@map("titles")
+}
+
+model RegionalFeed {
+  id          String           @id @default(uuid())
+  country     String
+  kind        RegionalFeedKind
+  refreshedAt DateTime?        @map("refreshed_at")
+  expiresAt   DateTime         @map("expires_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  items RegionalFeedItem[]
+
+  @@unique([country, kind])
+  @@index([country, expiresAt])
+  @@map("regional_feeds")
+}
+
+model RegionalFeedItem {
+  feedId       String   @map("feed_id")
+  titleId      String   @map("title_id")
+  position     Int
+  score        Float
+  sourceScore  Float    @map("source_score")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  feed  RegionalFeed @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  title Title        @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@id([feedId, titleId])
+  @@unique([feedId, position])
+  @@index([titleId])
+  @@map("regional_feed_items")
 }
 
 model Genre {

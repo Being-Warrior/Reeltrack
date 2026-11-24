@@ -5,10 +5,8 @@ import { getTasteProfile } from "@/lib/taste";
 import { explainTitleMatch, getActiveRecommendations } from "@/lib/recommendations";
 import { ensureRecentEpisodes, ensureTitleFresh } from "@/lib/tmdb/sync";
 import { hydratePersonIfNeeded } from "@/lib/search";
-import { getPopularMoviesByRegion } from "@/lib/tmdb/movies";
-import { upsertSearchTitleStub } from "@/lib/tmdb/sync";
 import { countryName, normalizeCountryCode } from "@/lib/countries";
-import { TMDB_PAGE_AUXILIARY_TIMEOUT_MS } from "@/lib/constants";
+import { getRegionalMovieFeed } from "@/lib/regional-feeds";
 
 const titleInclude = {
   genres: { include: { genre: true } },
@@ -49,38 +47,10 @@ export async function toCards(
   );
 }
 
-async function getRegionalMovieTitles(country: string) {
-  try {
-    const result = await getPopularMoviesByRegion(country, TMDB_PAGE_AUXILIARY_TIMEOUT_MS);
-    const items = result.results.slice(0, 18);
-    const existing = await prisma.title.findMany({
-      where: { type: TitleType.MOVIE, tmdbId: { in: items.map((item) => item.id) } },
-      include: titleInclude,
-    });
-    const byTmdbId = new Map(existing.map((title) => [title.tmdbId, title]));
-    const missing = items.filter((item) => !byTmdbId.has(item.id));
-    await Promise.all(missing.map((item) => upsertSearchTitleStub(item, TitleType.MOVIE)));
-    const added = missing.length === 0
-      ? []
-      : await prisma.title.findMany({
-          where: { type: TitleType.MOVIE, tmdbId: { in: missing.map((item) => item.id) } },
-          include: titleInclude,
-        });
-    for (const title of added) byTmdbId.set(title.tmdbId, title);
-    return items.flatMap((item) => {
-      const title = byTmdbId.get(item.id);
-      return title ? [title] : [];
-    });
-  } catch {
-    // This row is additive; keep Home quick and usable if TMDB is unavailable.
-    return [];
-  }
-}
-
 export async function getHomeData(userId: string) {
   const preference = await prisma.userPreference.findUnique({ where: { userId }, select: { country: true } });
   const country = normalizeCountryCode(preference?.country);
-  const [continueRows, recommendations, recentlyCompleted, newTitles, regionalMovies] = await Promise.all([
+  const [continueRows, recommendations, recentlyCompleted, newTitles, regionalFeed] = await Promise.all([
     prisma.userTitleStatus.findMany({
       where: { userId, status: { in: [WatchStatus.WATCHING, WatchStatus.PAUSED] } },
       include: { title: { include: titleInclude } },
@@ -100,8 +70,9 @@ export async function getHomeData(userId: string) {
       orderBy: { releaseDate: "desc" },
       take: 18,
     }),
-    getRegionalMovieTitles(country),
+    getRegionalMovieFeed(country),
   ]);
+  const regionalMovies = regionalFeed?.items.map((item) => item.title) ?? [];
 
   const allTitles = [
     ...continueRows.map((row) => row.title),
@@ -155,6 +126,7 @@ export async function getHomeData(userId: string) {
     newThisWeek: await toCards(availableNewTitles, extras),
     popularInRegion: await toCards(availableRegionalMovies.slice(0, 12), extras),
     regionName: countryName(country),
+    regionalFeedNeedsRefresh: !regionalFeed || regionalFeed.expiresAt.getTime() <= Date.now(),
     lastLoved: recentlyCompleted[0]?.title.title ?? null,
   };
 }

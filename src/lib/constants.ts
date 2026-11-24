@@ -31,7 +31,6 @@ export const NAV_DESKTOP = [
   { href: "/watchlist", label: "Watchlist" },
   { href: "/collections", label: "Collections" },
   { href: "/watched", label: "Watched" },
-  { href: "/analytics", label: "Analytics" },
   { href: "/coming-soon", label: "Coming soon" },
   { href: "/streaming", label: "Streaming now" },
 ] as const;

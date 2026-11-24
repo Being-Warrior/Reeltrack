@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { TitleType } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
+import { SearchBox } from "@/components/search-box";
 import { TitleRow } from "@/components/title-card";
 import { getDiscoverData } from "@/lib/queries";
 import { requireUser } from "@/lib/session";
@@ -22,6 +23,7 @@ export default async function DiscoverPage({
         <header>
           <h1 className="font-serif text-5xl">Discover</h1>
           <p className="mt-2 text-muted">Browse the catalog we store locally, filtered to your mood.</p>
+          <div className="mt-5 max-w-xl"><SearchBox /></div>
         </header>
         <div className="flex flex-wrap gap-2">
           <Link

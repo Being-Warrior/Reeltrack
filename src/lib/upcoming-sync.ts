@@ -92,7 +92,7 @@ async function syncSeries(userId: string, source: { id: string; tmdbId: number; 
 
 export async function runUpcomingSync() {
   const [completed, favourites] = await Promise.all([
-    prisma.userTitleStatus.findMany({ where: { status: WatchStatus.COMPLETED }, include: { title: true } }),
+    prisma.userTitleStatus.findMany({ where: { status: { in: [WatchStatus.COMPLETED, WatchStatus.WATCHLIST, WatchStatus.WATCHING] } }, include: { title: true } }),
     prisma.favorite.findMany({ include: { title: true } }),
   ]);
   const tracked = new Map<string, { userId: string; id: string; tmdbId: number; type: TitleType; title: string }>();

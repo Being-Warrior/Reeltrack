@@ -51,6 +51,64 @@ enum RegionalFeedKind {
   POPULAR_MOVIES
 }
 
+enum IntegrationProvider {
+  YOUTUBE_EXTENSION
+  PLEX
+  VLC_COMPANION
+  JELLYFIN
+  KODI
+  GOOGLE_TAKEOUT
+  CSV_IMPORT
+}
+
+enum IntegrationStatus {
+  ACTIVE
+  PAUSED
+  DISCONNECTED
+  ERROR
+}
+
+enum AutoSyncDeviceType {
+  BROWSER_EXTENSION
+  DESKTOP_COMPANION
+  WEBHOOK
+  IMPORT
+}
+
+enum PlaybackEventType {
+  STARTED
+  PROGRESS
+  PAUSED
+  STOPPED
+  COMPLETED
+}
+
+enum PlaybackEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  NEEDS_REVIEW
+  REJECTED
+  FAILED
+}
+
+enum AutoSyncMediaType {
+  MOVIE
+  TV_EPISODE
+  VIDEO
+  UNKNOWN
+}
+
+enum ViewingState {
+  STARTED
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  ABANDONED
+  REWATCHED
+  NEEDS_REVIEW
+}
+
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
@@ -76,6 +134,12 @@ model User {
   upcomingReleases       UpcomingRelease[]
   episodeProgress        EpisodeProgress[]
   notifications          Notification[]
+  integrations           Integration[]
+  autoSyncDevices        AutoSyncDevice[]
+  devicePairingCodes     DevicePairingCode[]
+  playbackEvents         PlaybackEvent[]
+  viewingSessions        ViewingSession[]
+  viewingHistory         ViewingHistory[]
 
   @@index([email])
   @@index([username])
@@ -174,6 +238,8 @@ model Title {
   upcomingSource     UpcomingRelease[] @relation("UpcomingSource")
   upcomingRelated    UpcomingRelease[] @relation("UpcomingRelated")
   regionalFeedItems  RegionalFeedItem[]
+  viewingSessions    ViewingSession[]
+  viewingHistory     ViewingHistory[]
 
   @@unique([tmdbId, type])
   @@index([tmdbId])
@@ -343,6 +409,8 @@ model Episode {
 
   season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   progress EpisodeProgress[]
+  viewingSessions ViewingSession[]
+  viewingHistory ViewingHistory[]
 
   @@unique([seasonId, episodeNumber])
   @@index([seasonId])
@@ -550,4 +618,157 @@ model Notification {
   @@index([userId, readAt])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+model Integration {
+  id           String            @id @default(uuid())
+  userId       String            @map("user_id")
+  provider     IntegrationProvider
+  displayName  String            @map("display_name")
+  status       IntegrationStatus @default(ACTIVE)
+  permissions  Json?
+  config       Json?
+  lastSyncedAt DateTime?         @map("last_synced_at")
+  lastError    String?           @db.Text @map("last_error")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  devices  AutoSyncDevice[]
+  events   PlaybackEvent[]
+  sessions ViewingSession[]
+
+  @@index([userId, status])
+  @@index([userId, provider])
+  @@map("integrations")
+}
+
+model AutoSyncDevice {
+  id             String             @id @default(uuid())
+  userId         String             @map("user_id")
+  integrationId  String?            @map("integration_id")
+  type           AutoSyncDeviceType
+  name           String
+  tokenHash      String             @unique @map("token_hash")
+  tokenExpiresAt DateTime?          @map("token_expires_at")
+  lastSeenAt     DateTime?          @map("last_seen_at")
+  revokedAt      DateTime?          @map("revoked_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integration Integration?  @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  events      PlaybackEvent[]
+  sessions    ViewingSession[]
+
+  @@index([userId, revokedAt])
+  @@index([integrationId])
+  @@map("autosync_devices")
+}
+
+model DevicePairingCode {
+  id        String             @id @default(uuid())
+  userId    String             @map("user_id")
+  type      AutoSyncDeviceType
+  codeHash  String             @unique @map("code_hash")
+  expiresAt DateTime           @map("expires_at")
+  claimedAt DateTime?          @map("claimed_at")
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("device_pairing_codes")
+}
+
+model PlaybackEvent {
+  id                String               @id @default(uuid())
+  eventKey          String               @unique @map("event_key")
+  userId            String               @map("user_id")
+  integrationId     String?              @map("integration_id")
+  deviceId          String?              @map("device_id")
+  eventType         PlaybackEventType    @map("event_type")
+  status            PlaybackEventStatus  @default(PENDING)
+  mediaType         AutoSyncMediaType    @map("media_type")
+  providerContentId String?              @map("provider_content_id")
+  title             String?
+  seriesTitle       String?              @map("series_title")
+  seasonNumber      Int?                 @map("season_number")
+  episodeNumber     Int?                 @map("episode_number")
+  positionSeconds   Int?                 @map("position_seconds")
+  durationSeconds   Int?                 @map("duration_seconds")
+  sourceUrl         String?              @map("source_url")
+  occurredAt        DateTime             @map("occurred_at")
+  receivedAt        DateTime             @default(now()) @map("received_at")
+  processedAt       DateTime?            @map("processed_at")
+  error             String?              @db.Text
+  payload           Json?
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integration Integration?    @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  device      AutoSyncDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([status, receivedAt])
+  @@index([userId, occurredAt])
+  @@index([providerContentId])
+  @@map("playback_events")
+}
+
+model ViewingSession {
+  id                String            @id @default(uuid())
+  userId            String            @map("user_id")
+  integrationId     String?           @map("integration_id")
+  deviceId          String?           @map("device_id")
+  titleId           String?           @map("title_id")
+  episodeId         String?           @map("episode_id")
+  mediaType         AutoSyncMediaType @map("media_type")
+  source            String
+  providerContentId String?           @map("provider_content_id")
+  sourceTitle       String?           @map("source_title")
+  sourceUrl         String?           @map("source_url")
+  startedAt         DateTime          @map("started_at")
+  endedAt           DateTime?         @map("ended_at")
+  watchedSeconds    Int               @default(0) @map("watched_seconds")
+  durationSeconds   Int?              @map("duration_seconds")
+  state             ViewingState      @default(STARTED)
+  confidence        Float             @default(0)
+  reviewReason      String?           @map("review_reason")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integration Integration?    @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  device      AutoSyncDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  title       Title?          @relation(fields: [titleId], references: [id], onDelete: SetNull)
+  episode     Episode?        @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  history     ViewingHistory?
+
+  @@index([userId, startedAt])
+  @@index([userId, providerContentId, startedAt])
+  @@index([state, updatedAt])
+  @@map("viewing_sessions")
+}
+
+model ViewingHistory {
+  id          String       @id @default(uuid())
+  userId      String       @map("user_id")
+  sessionId   String       @unique @map("session_id")
+  titleId     String?      @map("title_id")
+  episodeId   String?      @map("episode_id")
+  state       ViewingState
+  watchedAt   DateTime     @map("watched_at")
+  rewatch     Int          @default(0)
+  source      String
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session ViewingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  title   Title?         @relation(fields: [titleId], references: [id], onDelete: SetNull)
+  episode Episode?       @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+
+  @@index([userId, watchedAt])
+  @@index([titleId])
+  @@index([episodeId])
+  @@map("viewing_history")
 }

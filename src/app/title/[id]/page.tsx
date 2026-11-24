@@ -74,7 +74,7 @@ export default async function TitlePage({ params }: { params: Promise<{ id: stri
             {title.tagline ? <p className="font-serif text-2xl text-gold/90">{title.tagline}</p> : null}
             <p className="max-w-3xl text-lg leading-relaxed text-muted">{title.overview ?? "No overview stored yet."}</p>
             {user ? <WatchActions titleId={title.id} status={card.watchStatus} favorite={card.isFavorite} rating={card.userRating} recommendationId={recommendation?.id} /> : <Link href="/login" className="inline-flex rounded-full bg-gold px-4 py-2 text-sm text-bg">Sign in to track this</Link>}
-            <TitleExtras trailerKey={trailer?.key} providers={providers} />
+            <TitleExtras titleId={title.id} trailerKey={trailer?.key} providers={providers} />
             {user ? <AddToCollection
               titleId={title.id}
               collections={collections.map((collection) => ({
